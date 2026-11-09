@@ -5,12 +5,58 @@ namespace App\Http\Controllers;
 use App\Models\User;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Hash;
+use Illuminate\Validation\Rule;
 
 class UserController extends Controller
 {
-    public function index()
+    public function index(Request $request)
     {
-        return view('users.index', ['users' => User::orderBy('name')->get()]);
+        $tab = $request->input('tab', 'active');
+
+        $query = User::query();
+
+        // Tab filtering
+        match ($tab) {
+            'active'   => $query->where('status', 'active'),
+            'new'      => $query->where('created_at', '>=', now()->subDays(7)),
+            'staff'    => $query->where('role', 'Staff Gudang'),
+            'manager'  => $query->where('role', 'Manajer Gudang'),
+            'admin'    => $query->where('role', 'Admin'),
+            'inactive' => $query->where('status', '!=', 'active'),
+            default    => $query->where('status', 'active'),
+        };
+
+        // Search
+        $query->when($request->filled('search'), function ($q) use ($request) {
+            $term = $request->search;
+            $q->where(function ($q) use ($term) {
+                $q->where('name', 'like', "%{$term}%")
+                  ->orWhere('username', 'like', "%{$term}%")
+                  ->orWhere('email', 'like', "%{$term}%");
+            });
+        });
+
+        // Sort: Staff → Manager → Admin, then by name
+        $query->orderByRaw("CASE role
+            WHEN 'Staff Gudang'   THEN 1
+            WHEN 'Manajer Gudang' THEN 2
+            WHEN 'Admin'          THEN 3
+            ELSE 4 END")
+            ->orderBy('name');
+
+        $users = $query->paginate(25)->withQueryString();
+
+        // Tab counts
+        $counts = [
+            'active'   => User::where('status', 'active')->count(),
+            'new'      => User::where('created_at', '>=', now()->subDays(7))->count(),
+            'staff'    => User::where('role', 'Staff Gudang')->count(),
+            'manager'  => User::where('role', 'Manajer Gudang')->count(),
+            'admin'    => User::where('role', 'Admin')->count(),
+            'inactive' => User::where('status', '!=', 'active')->count(),
+        ];
+
+        return view('users.index', compact('users', 'tab', 'counts'));
     }
 
     public function create()
@@ -21,16 +67,18 @@ class UserController extends Controller
     public function store(Request $request)
     {
         $data = $request->validate([
-            'username' => 'required|unique:users,username|max:50',
-            'name'     => 'required|max:100',
-            'password' => 'required|min:6',
-            'role'     => 'required|in:Admin,Manajer Gudang,Staff Gudang',
-            'status'   => 'required|in:active,inactive',
+            'name'     => ['required', 'string', 'max:100'],
+            'username' => ['required', 'string', 'max:50', 'alpha_dash', Rule::unique('users', 'username')],
+            'email'    => ['nullable', 'email', 'max:150', Rule::unique('users', 'email')],
+            'password' => ['required', 'string', 'min:6'],
+            'role'     => ['required', 'in:Admin,Manajer Gudang,Staff Gudang'],
+            'status'   => ['required', 'in:active,inactive'],
         ]);
+
         $data['password'] = Hash::make($data['password']);
         User::create($data);
-        return redirect()->route('users.index')
-            ->with('success', 'Pengguna berhasil ditambahkan.');
+
+        return redirect()->route('users.index')->with('success', __('User created successfully.'));
     }
 
     public function edit(User $user)
@@ -41,29 +89,35 @@ class UserController extends Controller
     public function update(Request $request, User $user)
     {
         $data = $request->validate([
-            'username' => 'required|unique:users,username,' . $user->id . '|max:50',
-            'name'     => 'required|max:100',
-            'password' => 'nullable|min:6',
-            'role'     => 'required|in:Admin,Manajer Gudang,Staff Gudang',
-            'status'   => 'required|in:active,inactive',
+            'name'     => ['required', 'string', 'max:100'],
+            'username' => ['required', 'string', 'max:50', 'alpha_dash',
+                           Rule::unique('users', 'username')->ignore($user->id)],
+            'email'    => ['nullable', 'email', 'max:150',
+                           Rule::unique('users', 'email')->ignore($user->id)],
+            'password' => ['nullable', 'string', 'min:6'],
+            'role'     => ['required', 'in:Admin,Manajer Gudang,Staff Gudang'],
+            'status'   => ['required', 'in:active,inactive'],
         ]);
+
         if (!empty($data['password'])) {
             $data['password'] = Hash::make($data['password']);
         } else {
             unset($data['password']);
         }
+
         $user->update($data);
-        return redirect()->route('users.index')
-            ->with('success', 'Pengguna berhasil diperbarui.');
+
+        return redirect()->route('users.index')->with('success', __('User updated successfully.'));
     }
 
     public function destroy(User $user)
     {
         if ($user->id === auth()->id()) {
-            return back()->with('error', 'Anda tidak dapat menghapus akun sendiri.');
+            return back()->with('error', __('You cannot delete your own account.'));
         }
+
         $user->delete();
-        return redirect()->route('users.index')
-            ->with('success', 'Pengguna berhasil dihapus.');
+
+        return redirect()->route('users.index')->with('success', __('User deleted successfully.'));
     }
 }

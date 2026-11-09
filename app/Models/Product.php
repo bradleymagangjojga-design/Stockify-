@@ -19,6 +19,10 @@ class Product extends Model
         'selling_price'  => 'decimal:2',
     ];
 
+    // ============================================================
+    // RELATIONSHIPS
+    // ============================================================
+
     public function category()
     {
         return $this->belongsTo(Category::class);
@@ -39,13 +43,81 @@ class Product extends Model
         return $this->hasMany(StockOpname::class);
     }
 
+    // ============================================================
+    // SCOPES
+    // ============================================================
+
+    /**
+     * Products with stock strictly BELOW minimum threshold.
+     * Note: stock == min_stock is considered SAFE, not low.
+     */
     public function scopeLowStock($query)
     {
-        return $query->whereColumn('stock', '<=', 'min_stock');
+        return $query->where('stock', '>', 0)
+                     ->whereColumn('stock', '<', 'min_stock');
     }
+
+    /**
+     * Products completely out of stock.
+     */
+    public function scopeOutOfStock($query)
+    {
+        return $query->where('stock', '<=', 0);
+    }
+
+    /**
+     * Products with sufficient stock (safe).
+     */
+    public function scopeSafeStock($query)
+    {
+        return $query->whereColumn('stock', '>=', 'min_stock');
+    }
+
+    // ============================================================
+    // ACCESSORS
+    // ============================================================
 
     public function getIsLowStockAttribute(): bool
     {
-        return $this->stock <= $this->min_stock;
+        return $this->stock > 0 && $this->stock < $this->min_stock;
+    }
+
+    public function getIsOutOfStockAttribute(): bool
+    {
+        return $this->stock <= 0;
+    }
+
+    public function getIsSafeStockAttribute(): bool
+    {
+        return $this->stock >= $this->min_stock;
+    }
+
+    public function getStockStatusAttribute(): string
+    {
+        if ($this->stock <= 0) {
+            return 'out';
+        }
+        if ($this->stock < $this->min_stock) {
+            return 'low';
+        }
+        return 'safe';
+    }
+
+    public function getStockStatusLabelAttribute(): string
+    {
+        return match ($this->stock_status) {
+            'out'  => __('Out of Stock'),
+            'low'  => __('Low Stock'),
+            default => __('Safe Stock'),
+        };
+    }
+
+    public function getStockStatusColorAttribute(): string
+    {
+        return match ($this->stock_status) {
+            'out'  => 'red',
+            'low'  => 'orange',
+            default => 'green',
+        };
     }
 }

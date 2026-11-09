@@ -11,14 +11,24 @@ class User extends Authenticatable
     use HasFactory, Notifiable;
 
     protected $fillable = [
-        'name', 'username', 'password', 'role', 'status',
+        'name',
+        'username',
+        'email',
+        'password',
+        'google_id',
+        'avatar',
+        'role',
+        'status',
+        'primary_color',
     ];
 
     protected $hidden = ['password', 'remember_token'];
 
-    protected $casts = [
-        'password' => 'hashed',
-    ];
+    protected $casts = [];
+
+    // ============================================================
+    // ROLE HELPERS
+    // ============================================================
 
     public function isAdmin(): bool
     {
@@ -35,8 +45,29 @@ class User extends Authenticatable
         return $this->role === 'Staff Gudang';
     }
 
+    /**
+     * Check if the user can edit products / inventory.
+     * Admin + Manager = yes. Staff = no.
+     */
+    public function canEdit(): bool
+    {
+        return in_array($this->role, ['Admin', 'Manajer Gudang']);
+    }
+
+    // ============================================================
+    // RELATIONSHIPS
+    // ============================================================
+
     public function transactions()
     {
         return $this->hasMany(Transaction::class);
+    }
+
+    /**
+     * ✅ Activity logs performed by this user.
+     */
+    public function activityLogs()
+    {
+        return $this->hasMany(\App\Models\ActivityLog::class);
     }
 }

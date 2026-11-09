@@ -9,10 +9,7 @@ class StockOpname extends Model
 {
     use HasFactory;
 
-    protected $fillable = [
-        'product_id', 'system_stock', 'physical_stock',
-        'difference', 'note', 'user_id', 'opname_date',
-    ];
+    protected $guarded = [];
 
     protected $casts = [
         'opname_date' => 'date',
