@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Stockify — Item Stock Management System
 
 A modern warehouse stock management application built with **Laravel 10 + Tailwind CSS + Flowbite**.
@@ -50,3 +51,6 @@ npm run build
 
 # 7. Start server
 php artisan serve
+=======
+# Stockify-
+>>>>>>> f32d1203b35d3fafd8bce2671ac703a235f7dbc4
